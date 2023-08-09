@@ -47,9 +47,10 @@ class Theta():
         self.dts.append(dt)
 
         # gx, gy, gz = data
-        current_theta = [d*dt for d in data]
+        current_theta = [1/2*d*(dt**2) for d in data]
         if len(self.thetas) > 0:
-            current_theta += self.thetas[-1] 
+            current_theta = [a+b for a, b in zip(self.thetas[-1], current_theta)]
+        print("THETA", current_theta)
         self.thetas.append(current_theta)
 
         return current_theta
@@ -65,6 +66,7 @@ imu_datas = get_imu_data("/dev/cu.usbserial-14230", baudrate=115200)
 start = time.time()
 
 theta_filter = Theta()
+prev_a = 0
 z = [0]
 
 fig = plt.figure()
@@ -72,10 +74,11 @@ ax = fig.add_subplot()
 fig.show()
 
 def animate(i):
-    global start
+    global start, prev_a
     # try:
         # for data in imu_datas:
     data = next(imu_datas)
+    data = calibrate(data)
     dt = time.time() - start
 
     gyro = ["gx", "gy", "gz"]
@@ -86,9 +89,11 @@ def animate(i):
     g_data = [data[key] for key in data.keys() if key in gyro]
     thetas = theta_filter.vanila_filter(g_data, dt)
     acc = get_acc(a_matrix, thetas)
-    z_acc = acc[0, -1]
+    z_acc = acc[0, -1] 
+    # z_acc = 0 if abs(z_acc) < 0.01 else z_acc
     print(z_acc)
-    d_z = 1/2*z_acc*(dt**2)
+    d_z = 1/2*(2*prev_a+z_acc)*(dt**2)
+    prev_a = z_acc
 
     z.append(z[-1]+d_z)        
 
@@ -98,7 +103,8 @@ def animate(i):
 
     start = time.time()
     # except: 
-    #     theta_filter.save_data()
+    if i % 100 == 0:
+        theta_filter.save_data()
 
 ani = animation.FuncAnimation(fig, animate, interval=50)
 plt.show()
